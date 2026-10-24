@@ -3,12 +3,8 @@ LOGFILE="/etc/config/uci-defaults-log.txt"
 echo "Starting 99-custom.sh at $(date)" >>$LOGFILE
 # WAN/LAN zone input 改由 crowdsec-lxc-bootstrap 按 name 定责管理
 #（单网口放行 WAN / 多网口收紧 WAN + LAN 放开），不再在此硬设 @zone[N] 索引
-#
-# v.75 起，旁路由网络基线全部搬迁至 crowdsec-lxc-bootstrap（每次开机按需校准）：
-#   br-lan 桥接口 / LAN 静态地址(含 custom_router_ip/gateway/dns/netmask 推导) /
-#   DHCP 让权(ignore) / WAN 禁用 / DNS 劫持(time.android.com) / docker 防火墙
-# v.77 起，dropbear/ttyd 监听面改由 bootstrap 按 LAN zone 定责绑定（不再清空=全监听）
-# 本文件只保留非网络的一次性首启设置
+# v.78-bp 起网络基线（桥/地址/DHCP 让权/WAN 禁用/DNS/docker 防火墙/服务监听面）
+# 全部由 bootstrap 每次开机按需校准；本文件只做非网络的一次性首启设置
 
   uci set luci.main.mediaurlbase="/luci-static/bootstrap"
   uci set luci.main.lang='auto'
@@ -20,9 +16,11 @@ NEW_DESCRIPTION="Packaged by wukongdaily"
 sed -i "s/DISTRIB_DESCRIPTION='[^']*'/DISTRIB_DESCRIPTION='$NEW_DESCRIPTION'/" "$FILE_PATH"
 
 CS_HOME='/etc/crowdsec'
-if [ -d "$CS_HOME" ] || [ -f "$CS_HOME/lxc-ubuntu.tar.gz" ] || [ -d /srv/lxc/ubuntu/rootfs ]; then
+if [ -d "$CS_HOME" ] || [ -f "$CS_HOME/lxc-crowdsec.tar.gz" ] || [ -f "$CS_HOME/lxc-ubuntu.tar.gz" ] || [ -d /srv/lxc/ubuntu/rootfs ]; then
     mkdir -p "$CS_HOME" 2>/dev/null
-    for _keep in "$CS_HOME/lxc-ubuntu.tar.gz"; do
+    # 保留清单要覆盖两种镜像名：极简版 lxc-crowdsec.tar.gz 与历史 systemd 版 lxc-ubuntu.tar.gz。
+    # 少了它，sysupgrade 之后镜像被抹掉、rc.local 走 --net-only，容器再也起不来。
+    for _keep in "$CS_HOME/lxc-crowdsec.tar.gz" "$CS_HOME/lxc-ubuntu.tar.gz"; do
         grep -q "^$_keep" /etc/sysupgrade.conf 2>/dev/null \
             || echo "$_keep" >> /etc/sysupgrade.conf 2>/dev/null
     done
